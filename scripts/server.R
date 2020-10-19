@@ -1,9 +1,3 @@
-# This is the server logic for a Shiny web application.
-# You can find out more about building applications with Shiny here:
-#
-# http://shiny.rstudio.com
-#
-
 library(shiny)
 library(ggplot2)
 library(plyr)
@@ -30,19 +24,21 @@ theme_set(theme_bw())
 # Later to be sourced
 ## ------------------------------------------------------------
 
-#Returns the colors from ggplot
+source("global.R")
+
+# Returns the colors from ggplot
 ggplotColours <- function(n = 6, h = c(0, 360) + 15){
   #Function to get ggplot colors
   if ((diff(h) %% 360) < 1) h[2] <- h[2] - 360/n
   hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
 }
 
-#Rescales x values between (min, max) to be between range (a,b)
+# Rescales x values between (min, max) to be between range (a,b)
 rescale <- function(x, min, max, range_a, range_b){
   return(((range_b - range_a)*(x - min) / (max - min)) + range_a)
 }
 
-#Given means and variances for likelihood of c1, c2, multiply by the category prior to obtain posterior
+# Given means and variances for likelihood of c1, c2, multiply by the category prior to obtain posterior
 get_categorization <- function(x, mu_c1, sd_c1, mu_c2, sd_c2, prior_c1 = 0.5, 
                                lapse_rate = 0, lapse_bias = prior_c1) {
   prior_c2 <- 1 - prior_c1
@@ -87,108 +83,129 @@ shinyServer(function(input, output, session) {
   # UI output elements
   ## ------------------------------------------------------------
   output$p.prior <- renderPlot({
-    prior1_c1 = input$prior1_c1
-    prior1_c2 = 1 - input$prior1_c1
+    prior_c1 = input$prior_c1
+    prior_c2 = 1 - input$prior_c1
 
     priors = data.frame(Category = c("/b/", "/p/"), 
-                        Prior = c(prior1_c1, 
-                                  1-prior1_c1))
+                        Prior = c(prior_c1, 
+                                  1-prior_c1))
     
     ggplot(priors, aes(x = Category, y = Prior, fill=Category)) +
       geom_bar(stat = "identity") + 
-      ggtitle("Category Prior") + 
+      ggtitle("Category priors") + 
       theme(legend.position="none")
   })
  
   output$p.means <- renderPlot({
-    mu1_c1 = input$mu1_c1
-    mu1_c2 = input$mu1_c2
+    mu_c1 = input$mu_c1
+    mu_c2 = input$mu_c2
     
     means = data.frame(Category = c("/b/", "/p/"), 
-                       VOT = c(mu1_c1, 
-                               mu1_c2))
+                       VOT = c(mu_c1, 
+                               mu_c2))
     
     ggplot(means, aes(x = Category, y = VOT, color=Category)) +
       geom_point() +
-      ggtitle("Category Means") + 
+      ggtitle("Category means") + 
       theme(legend.position="none")
   })
    
   output$p.sds <- renderPlot({
-    sd1_c1 = input$sd1_c1
-    sd1_c2 = input$sd1_c2
+    sd_c1 = input$sd_c1
+    sd_c2 = input$sd_c2
     
     sds = data.frame(Category = c("/b/", "/p/"), 
-                     VOT_SD = c(sd1_c1, 
-                                sd1_c2))
+                     VOT_SD = c(sd_c1, 
+                                sd_c2))
     
     ggplot(sds, aes(x = Category, y = VOT_SD, color=Category)) +
       geom_point() +
-      ggtitle("Category Standard Deviation") + 
+      ggtitle("Category SDs") + 
       theme(legend.position="none") 
   })  
   
   output$p.likelihood <- renderPlot({
-    mu1_c1 = input$mu1_c1
-    mu1_c2 = input$mu1_c2
-    sd1_c1 = input$sd1_c1
-    sd1_c2 = input$sd1_c2
+    mu_c1 = input$mu_c1
+    mu_c2 = input$mu_c2
+    sd_c1 = input$sd_c1
+    sd_c2 = input$sd_c2
     
     ggplot(data.frame(x = xs), aes(x = xs)) + 
       stat_function(fun = dnorm, 
-                    args = list(mean = mu1_c1, 
-                                sd = sd1_c1), 
-                    aes(col='/b/')) +
+                    args = list(mean = mu_c1, 
+                                sd = sd_c1), 
+                    aes(col = '/b/')) +
       stat_function(fun = dnorm, 
-                    args = list(mean = mu1_c2, 
-                                sd = sd1_c2), 
-                    aes(col='/p/')) + 
-      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/'=ggplotColours(2)[2])) + 
-      xlab("VOT (ms)") +ylab("Likelihood") + 
+                    args = list(mean = mu_c2, 
+                                sd = sd_c2), 
+                    aes(col = '/p/')) + 
+      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/' = ggplotColours(2)[2])) + 
+      xlab("VOT (ms)") + ylab("Likelihood\n(w/o noise)") + 
       theme(axis.title.x=element_blank(), legend.position = "none")
   })  
   
+  output$p.likelihood <- renderPlot({
+    mu_c1 = input$mu_c1
+    mu_c2 = input$mu_c2
+    sd_c1 = input$sd_c1
+    sd_c2 = input$sd_c2
+    sd_noise = input$sd_noise
+    
+    ggplot(data.frame(x = xs), aes(x = xs)) + 
+      stat_function(fun = dnorm, 
+                    args = list(mean = mu_c1, 
+                                sd = sqrt(sd_c1^2 + sd_noise^2)), 
+                    aes(col = '/b/')) +
+      stat_function(fun = dnorm, 
+                    args = list(mean = mu_c2, 
+                                sd = sqrt(sd_c2^2 + sd_noise^2)), 
+                    aes(col = '/p/')) + 
+      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/' = ggplotColours(2)[2])) + 
+      xlab("VOT (ms)") + ylab("Likelihood\n(w/ noise)") + 
+      theme(axis.title.x=element_blank(), legend.position = "none")
+  })  
+
   output$p.posterior <- renderPlot({
-    prior1_c1 = input$prior1_c1
-    prior1_c2 = 1 - input$prior1_c1
-    mu1_c1 = input$mu1_c1
-    mu1_c2 = input$mu1_c2
-    sd1_c1 = input$sd1_c1
-    sd1_c2 = input$sd1_c2
+    prior_c1 = input$prior_c1
+    prior_c2 = 1 - input$prior_c1
+    mu_c1 = input$mu_c1
+    mu_c2 = input$mu_c2
+    sd_c1 = input$sd_c1
+    sd_c2 = input$sd_c2
 
     ggplot(data.frame(x = xs), aes(x = xs)) + 
       stat_function(fun = combine_likelihood_prior, 
-                    args = list(mu_c1 = mu1_c1, 
-                                sd_c1 = sd1_c1, 
-                                prior_c =  prior1_c1), 
+                    args = list(mu_c1 = mu_c1, 
+                                sd_c1 = sd_c1, 
+                                prior_c =  prior_c1), 
                     aes(col='/b/')) +
       stat_function(fun = combine_likelihood_prior, 
-                    args = list(mu_c1 = mu1_c2, 
-                                sd_c1 = sd1_c2, 
-                                prior_c = 1-prior1_c1), 
+                    args = list(mu_c1 = mu_c2, 
+                                sd_c1 = sd_c2, 
+                                prior_c = 1-prior_c1), 
                     aes(col='/p/')) +
-      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/'=ggplotColours(2)[2])) + 
-      xlab("VOT (ms)") + ylab("Posterior") + 
+      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/' = ggplotColours(2)[2])) + 
+      xlab("VOT (ms)") + ylab("Posterior\n") + 
       theme(axis.title.x=element_blank(), legend.position = "none")
   })  
   
   output$p.categorization <- renderPlot({
-    prior1_c1 = input$prior1_c1
-    prior1_c2 = 1 - input$prior1_c1
-    mu1_c1 = input$mu1_c1
-    mu1_c2 = input$mu1_c2
-    sd1_c1 = input$sd1_c1
-    sd1_c2 = input$sd1_c2
+    prior_c1 = input$prior_c1
+    prior_c2 = 1 - input$prior_c1
+    mu_c1 = input$mu_c1
+    mu_c2 = input$mu_c2
+    sd_c1 = input$sd_c1
+    sd_c2 = input$sd_c2
     lapse_rate = input$lapse_rate
-    lapse_bias = if (!is.null(input$lapse_bias)) { input$lapse_bias } else { input$prior1_c1 }
+    lapse_bias = if (!is.null(input$lapse_bias)) { input$lapse_bias } else { input$prior_c1 }
 
     ggplot(data.frame(xs), aes(x = xs)) + 
       stat_function(fun = get_categorization, 
-                    args = list(mu_c1 = mu1_c1, 
-                                sd_c1 = sd1_c1, 
-                                mu_c2 = mu1_c2, 
-                                sd_c2 = sd1_c2, 
-                                prior_c1 = prior1_c1,
+                    args = list(mu_c1 = mu_c1, 
+                                sd_c1 = sd_c1, 
+                                mu_c2 = mu_c2, 
+                                sd_c2 = sd_c2, 
+                                prior_c1 = prior_c1,
                                 lapse_rate = lapse_rate,
                                 lapse_bias = lapse_bias)) +
       ylim(c(0,1)) +
@@ -196,10 +213,10 @@ shinyServer(function(input, output, session) {
   })  
   
   output$t.data <- renderDataTable({
-    mu = c(input$mu1_c1, input$mu1_c2)
-    sd = c(input$sd1_c1, input$sd1_c2)
+    mu = c(input$mu_c1, input$mu_c2)
+    sd = c(input$sd_c1, input$sd_c2)
     
-    cat_labels = rbinom(input$LenData, 1, input$prior1_c1)
+    cat_labels = rbinom(input$LenData, 1, input$prior_c1)
     cue = sapply(cat_labels, 
                 FUN = function(x) {
                   x = abs(x - 2)
