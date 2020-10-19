@@ -7,6 +7,11 @@ theme_set(theme_bw())
 ## ------------------------------------------------------------
 # To do
 ## ------------------------------------------------------------
+# Could add accuracy plot for categorization
+# 
+# Add discrimination plot
+
+
 # A) add option box to show text on classification plot that gives 
 #   1) point of maximal ambiguity
 #   2) linear term of slope in cue
@@ -60,7 +65,7 @@ combine_likelihood_prior <- function(x, mu_c1, sd_c1, prior_c = 0.5) {
 ## ------------------------------------------------------------
 
 shinyServer(function(input, output, session) {
-  xs = seq(-100, 90, 5)
+  xs = seq(min_cue, max_cue, step_cue)
   
 #  observeEvent(input$reset, {
 #    updateSliderInput(session, input$prior1_c1, value = default_prior1_c1)
@@ -86,42 +91,44 @@ shinyServer(function(input, output, session) {
     prior_c1 = input$prior_c1
     prior_c2 = 1 - input$prior_c1
 
-    priors = data.frame(Category = c("/b/", "/p/"), 
+    priors = data.frame(Category = c(c1, c2), 
                         Prior = c(prior_c1, 
-                                  1-prior_c1))
+                                  1 - prior_c1))
     
-    ggplot(priors, aes(x = Category, y = Prior, fill=Category)) +
+    ggplot(priors, aes(x = Category, y = Prior, fill = Category)) +
       geom_bar(stat = "identity") + 
       ggtitle("Category priors") + 
-      theme(legend.position="none")
+      theme(legend.position = "none")
   })
  
   output$p.means <- renderPlot({
     mu_c1 = input$mu_c1
     mu_c2 = input$mu_c2
     
-    means = data.frame(Category = c("/b/", "/p/"), 
+    means = data.frame(Category = c(c1, c2), 
                        VOT = c(mu_c1, 
                                mu_c2))
     
     ggplot(means, aes(x = Category, y = VOT, color=Category)) +
       geom_point() +
       ggtitle("Category means") + 
-      theme(legend.position="none")
+      scale_y_continuous(cue) +
+      theme(legend.position = "none")
   })
    
   output$p.sds <- renderPlot({
     sd_c1 = input$sd_c1
     sd_c2 = input$sd_c2
     
-    sds = data.frame(Category = c("/b/", "/p/"), 
+    sds = data.frame(Category = c(c1, c2), 
                      VOT_SD = c(sd_c1, 
                                 sd_c2))
     
     ggplot(sds, aes(x = Category, y = VOT_SD, color=Category)) +
       geom_point() +
       ggtitle("Category SDs") + 
-      theme(legend.position="none") 
+      scale_y_continuous(cue) +
+      theme(legend.position = "none") 
   })  
   
   output$p.likelihood <- renderPlot({
@@ -134,17 +141,21 @@ shinyServer(function(input, output, session) {
       stat_function(fun = dnorm, 
                     args = list(mean = mu_c1, 
                                 sd = sd_c1), 
-                    aes(col = '/b/')) +
+                    aes(col = c1)) +
       stat_function(fun = dnorm, 
                     args = list(mean = mu_c2, 
                                 sd = sd_c2), 
-                    aes(col = '/p/')) + 
-      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/' = ggplotColours(2)[2])) + 
-      xlab("VOT (ms)") + ylab("Likelihood\n(w/o noise)") + 
-      theme(axis.title.x=element_blank(), legend.position = "none")
+                    aes(col = c2)) + 
+      scale_colour_manual(
+        "Category", 
+        breaks = c(c1, c2),
+        values = c(ggplotColours(2)[1], ggplotColours(2)[2])) + 
+      scale_x_continuous(expand = c(0,0)) +
+      scale_y_continuous("Likelihood\n(w/o noise)") + 
+      theme(axis.title.x = element_blank(), legend.position = "none")
   })  
   
-  output$p.likelihood <- renderPlot({
+  output$p.likelihood.noise <- renderPlot({
     mu_c1 = input$mu_c1
     mu_c2 = input$mu_c2
     sd_c1 = input$sd_c1
@@ -155,14 +166,18 @@ shinyServer(function(input, output, session) {
       stat_function(fun = dnorm, 
                     args = list(mean = mu_c1, 
                                 sd = sqrt(sd_c1^2 + sd_noise^2)), 
-                    aes(col = '/b/')) +
+                    aes(col = c1)) +
       stat_function(fun = dnorm, 
                     args = list(mean = mu_c2, 
                                 sd = sqrt(sd_c2^2 + sd_noise^2)), 
-                    aes(col = '/p/')) + 
-      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/' = ggplotColours(2)[2])) + 
-      xlab("VOT (ms)") + ylab("Likelihood\n(w/ noise)") + 
-      theme(axis.title.x=element_blank(), legend.position = "none")
+                    aes(col = c2)) + 
+      scale_colour_manual(
+        "Category", 
+        breaks = c(c1, c2),
+        values = c(ggplotColours(2)[1], ggplotColours(2)[2])) + 
+      scale_x_continuous(expand = c(0,0)) +
+      scale_y_continuous("Likelihood\n(w noise)") + 
+      theme(axis.title.x = element_blank(), legend.position = "none")
   })  
 
   output$p.posterior <- renderPlot({
@@ -172,21 +187,27 @@ shinyServer(function(input, output, session) {
     mu_c2 = input$mu_c2
     sd_c1 = input$sd_c1
     sd_c2 = input$sd_c2
-
+    sd_noise = input$sd_noise
+    
     ggplot(data.frame(x = xs), aes(x = xs)) + 
       stat_function(fun = combine_likelihood_prior, 
                     args = list(mu_c1 = mu_c1, 
-                                sd_c1 = sd_c1, 
+                                sd_c1 = sqrt(sd_c1^2 + sd_noise^2), 
                                 prior_c =  prior_c1), 
-                    aes(col='/b/')) +
+                    aes(col = c1)) +
       stat_function(fun = combine_likelihood_prior, 
                     args = list(mu_c1 = mu_c2, 
-                                sd_c1 = sd_c2, 
-                                prior_c = 1-prior_c1), 
-                    aes(col='/p/')) +
-      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/' = ggplotColours(2)[2])) + 
-      xlab("VOT (ms)") + ylab("Posterior\n") + 
-      theme(axis.title.x=element_blank(), legend.position = "none")
+                                sd_c1 = sqrt(sd_c2^2 + sd_noise^2), 
+                                prior_c = 1 - prior_c1), 
+                    aes(col = c2)) +
+      scale_colour_manual(
+        "Category", 
+        breaks = c(c1, c2),
+        values = c(ggplotColours(2)[1], ggplotColours(2)[2])) + 
+      scale_x_continuous(expand = c(0,0)) +
+      scale_y_continuous("Posterior") + 
+      theme(axis.title.x = element_blank(), legend.position = "none")
+    
   })  
   
   output$p.categorization <- renderPlot({
@@ -196,20 +217,25 @@ shinyServer(function(input, output, session) {
     mu_c2 = input$mu_c2
     sd_c1 = input$sd_c1
     sd_c2 = input$sd_c2
+    sd_noise = input$sd_noise
     lapse_rate = input$lapse_rate
     lapse_bias = if (!is.null(input$lapse_bias)) { input$lapse_bias } else { input$prior_c1 }
 
     ggplot(data.frame(xs), aes(x = xs)) + 
       stat_function(fun = get_categorization, 
                     args = list(mu_c1 = mu_c1, 
-                                sd_c1 = sd_c1, 
+                                sd_c1 = sqrt(sd_c1^2 + sd_noise^2), 
                                 mu_c2 = mu_c2, 
-                                sd_c2 = sd_c2, 
+                                sd_c2 = sqrt(sd_c2^2 + sd_noise^2), 
                                 prior_c1 = prior_c1,
                                 lapse_rate = lapse_rate,
                                 lapse_bias = lapse_bias)) +
-      ylim(c(0,1)) +
-      xlab("VOT (ms)") + ylab("Probability of\n'/b/' Response")
+      scale_x_continuous(
+        cue,
+        expand = c(0,0)) +
+      scale_y_continuous(
+        paste0("Probability of\n", c1, "-response"),
+        limits = c(0,1))
   })  
   
   output$t.data <- renderDataTable({

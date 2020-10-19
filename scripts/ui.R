@@ -102,7 +102,9 @@ shinyUI(
              
              fluidRow(
                column(4,
-                      div("This tab illustrates the consequences of  "),
+                      div("This tab illustrates Bayesian inference over noisy perceptual input for both categorization 
+                          (e.g., Clayards et al., 2008) and discimination (e.g,. Feldman et al., 2009)."),
+                      br(),
                       plotOutput('p.prior', height = h), 
                       plotOutput('p.means', height = h),
                       plotOutput('p.sds', height = h)),
