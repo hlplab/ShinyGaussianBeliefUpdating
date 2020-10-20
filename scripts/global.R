@@ -1,5 +1,6 @@
 # Kronrod etal. (2016) parameters
 cue = "VOT"
+cue_unit = "msecs"
 c1 = "/b/"
 c2 = "/p/"
 

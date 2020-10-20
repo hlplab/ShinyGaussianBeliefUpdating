@@ -111,12 +111,13 @@ shinyUI(
                column(8,
                       plotOutput('p.likelihood', height = h),
                       plotOutput('p.likelihood.noise', height = h),
-                      plotOutput('p.posterior', height = h),
+                      plotOutput('p.unnormalized.posterior', height = h),
                       
                       h4("Ideal categorization"),
                       plotOutput('p.categorization', height = h),
                       
                       h4("Ideal discrimination"),
+                      plotOutput('p.warping', height = h),
                       plotOutput('p.discrimination', height = h)))),
     tabPanel("Generate Data", 
              h4("Generate data from known category-specific cue distributions"),
