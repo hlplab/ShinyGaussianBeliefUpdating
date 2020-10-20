@@ -102,7 +102,7 @@ shinyUI(
              
              fluidRow(
                column(4,
-                      div("This tab illustrates Bayesian inference over noisy perceptual input for both categorization 
+                      div("This tab illustrates Bayesian inference over noisy perceptual input for both categorization/identification 
                           (e.g., Clayards et al., 2008) and discimination (e.g,. Feldman et al., 2009)."),
                       br(),
                       plotOutput('p.prior', height = h), 
@@ -113,7 +113,7 @@ shinyUI(
                       plotOutput('p.likelihood.noise', height = h),
                       plotOutput('p.unnormalized.posterior', height = h),
                       
-                      h4("Ideal categorization"),
+                      h4("Ideal identification"),
                       plotOutput('p.categorization', height = h),
                       
                       h4("Ideal discrimination"),

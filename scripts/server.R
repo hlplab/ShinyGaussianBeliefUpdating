@@ -229,7 +229,7 @@ shinyServer(function(input, output, session) {
       scale_x_continuous(
         cue,
         expand = c(0,0)) +
-      scale_y_continuous("Posterior") + 
+      scale_y_continuous("Unnormalized\nposterior") + 
       theme(
         legend.position = "none")
     
@@ -273,11 +273,11 @@ shinyServer(function(input, output, session) {
       geom_segment(
         x = x_boundary, xend = x_boundary,
         y = .5, yend = 0,
-        linetype = 2, size = .5, color = "darkgray") +
+        linetype = 3, size = .5, color = "darkgray") +
       geom_segment(
         x = min(xs), xend = x_boundary,
         y = .5, yend = .5,
-        linetype = 2, size = .5, color = "darkgray") +
+        linetype = 3, size = .5, color = "darkgray") +
       annotate(
         x = x_boundary, 
         y = 0, 
