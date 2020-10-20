@@ -1,6 +1,7 @@
 # Libraries ------------------------------------------------------------
 library(shiny)
 library(tidyverse)
+library(rlang)
 theme_set(theme_bw())
 
 
@@ -121,35 +122,25 @@ shinyServer(function(input, output, session) {
         legend.position = "none")
   })
  
-  output$p.means <- renderPlot({
+  output$p.means.sds <- renderPlot({
     mu_c1 = input$mu_c1
     mu_c2 = input$mu_c2
-    
-    means = data.frame(Category = c(c1, c2), 
-                       VOT = c(mu_c1, 
-                               mu_c2))
-    
-    ggplot(means, aes(x = Category, y = VOT, color=Category)) +
-      geom_point() +
-      ggtitle("Category means") + 
-      scale_y_continuous(cue) +
-      theme(
-        axis.title.x = element_blank(), 
-        legend.position = "none")
-  })
-   
-  output$p.sds <- renderPlot({
     sd_c1 = input$sd_c1
     sd_c2 = input$sd_c2
     
-    sds = data.frame(Category = c(c1, c2), 
-                     VOT_SD = c(sd_c1, 
-                                sd_c2))
-    
-    ggplot(sds, aes(x = Category, y = VOT_SD, color=Category)) +
-      geom_point() +
-      ggtitle("Category SDs") + 
-      scale_y_continuous(cue) +
+    data.frame(
+      Category = c(c1, c2), 
+      mean = c(mu_c1, mu_c2),
+      sd = c(sd_c1, sd_c2)) %>%
+    ggplot(aes(
+      x = mean, 
+      y = sd, 
+      color = Category,
+      label = Category)) +
+      geom_text(fontface = "bold") +
+      ggtitle("Category likelihoods") + 
+      scale_x_continuous(paste("mean", cue)) +
+      scale_y_continuous(paste("SD", cue), expand = c(.2,.2)) +
       theme(legend.position = "none") 
   })  
   
@@ -432,19 +423,70 @@ shinyServer(function(input, output, session) {
   })
   
   # Data generation --------------------------------------------------------------- 
+  output$p.prior.exposure <- renderPlot({
+    data.frame(
+      exposure = c("prior", "prior", "exposure A", "exposure A", "exposure B", "exposure B"),
+      Category = c(c1, c2, c1, c2, c1, c2), 
+      prior = c(input$prior_c1, 1 - input$prior_c1,
+                input$prior_c1_A, 1 - input$prior_c1_A,
+                input$prior_c1_B, 1 - input$prior_c1_B)
+    ) %>%
+    ggplot(
+      aes(x = Category, y = prior, fill = exposure)) +
+      geom_bar(stat = "identity", position = position_dodge()) + 
+      ggtitle("Category priors") + 
+      theme(
+        axis.title.x = element_blank(),
+        legend.position = "none")
+  })
+  
+  output$p.means.sds.exposure <- renderPlot({
+    data.frame(
+      exposure = c("prior", "prior", "exposure A", "exposure A", "exposure B", "exposure B"),
+      Category = c(c1, c2, c1, c2, c1, c2), 
+      mean = c(input$mu_c1, input$mu_c2, input$mu_c1_A, input$mu_c2_A, input$mu_c1_B, input$mu_c2_B),
+      sd = c(input$sd_c1, input$sd_c2, input$sd_c1_A, input$sd_c2_A, input$sd_c1_B, input$sd_c2_B)) %>%
+      ggplot(aes(
+        x = mean, 
+        y = sd, 
+        color = exposure,
+        label = Category)) +
+      geom_text(fontface = "bold") +
+      ggtitle("Category likelihoods") + 
+      scale_x_continuous(paste("mean", cue)) +
+      scale_y_continuous(paste("SD", cue), expand = c(.2,.2)) +
+      theme(legend.position = "none") 
+  })  
+  
   output$t.data <- renderDataTable({
-    mu = c(input$mu_c1, input$mu_c2)
-    sd = c(input$sd_c1, input$sd_c2)
-    
-    cat_labels = rbinom(input$LenData, 1, input$prior_c1)
-    cue = sapply(cat_labels, 
+    mu_A = c(input$mu_c1_A, input$mu_c2_A)
+    sd_A = c(input$sd_c1_A, input$sd_c2_A)
+    cat_labels_A = rbinom(input$LenData, 1, input$prior_c1_A)
+    cue_A = sapply(cat_labels_A, 
                 FUN = function(x) {
                   x = abs(x - 2)
-                  rnorm(1, mu[x], sd[x])
+                  rnorm(1, mu_A[x], sd_A[x])
                 })
     
-    data.frame(Category = ifelse(cat_labels, "/b/", "/p/"),
-               VOT = cue) #selection = list(target = 'row', selected = c(1:input$LenData)))
+    mu_B = c(input$mu_c1_B, input$mu_c2_B)
+    sd_B = c(input$sd_c1_B, input$sd_c2_B)
+    cat_labels_B = rbinom(input$LenData, 1, input$prior_c1_B)
+    cue_B = sapply(cat_labels_B, 
+                   FUN = function(x) {
+                     x = abs(x - 2)
+                     rnorm(1, mu_B[x], sd_B[x])
+                   })
+    
+    data.frame(
+      Condition = "A",
+      Category = ifelse(cat_labels_A, c1, c2),
+      cue = cue_A) %>%
+      rbind(
+        data.frame(
+          Condition = "B",
+          Category = ifelse(cat_labels_B, c1, c2),
+          cue = cue_B)
+      )
   }, options = list(lengthMenu = c(25, 50, 100), pageLength = 25))
   
 #  output$p.empirical.density <- renderPlot({
