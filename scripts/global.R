@@ -24,6 +24,8 @@ value_sd_c1_B = 14^.5
 value_sd_c2_B = 14^.5
 
 value_n_exposure = 222
+value_kappa = 1
+value_nu = 1
 
 # Other parameters
 value_epsilon = 50 

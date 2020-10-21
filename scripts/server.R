@@ -8,7 +8,7 @@ theme_set(theme_bw())
 # To do ------------------------------------------------------------
 # Could add accuracy plot for categorization
 # 
-# Add discrimination plot
+# add noise to exposure sample
 
 
 # A) add option box to show text on classification plot that gives 
@@ -458,6 +458,24 @@ shinyServer(function(input, output, session) {
       theme(legend.position = "none") 
   })  
   
+   # output$p.exposure.density <- renderPlot({
+   #   output$t.data %>%
+   #   ggplot(aes(x = cue)) +
+   #     geom_density(
+   #       aes(
+   #         linetype = category,
+   #         fill = exposure,
+   #       )) +
+   #     scale_colour_manual(
+   #       "Category", 
+   #       breaks = c(c1, c2),
+   #       values = c(ggplotColours(2)[1], ggplotColours(2)[2])) + 
+   #     scale_x_continuous(cue, expand = c(0,0)) +
+   #     ylab("Density") + 
+   #     theme(axis.title.x = element_blank(), legend.position = "none")
+   # })
+   # 
+  
   output$t.data <- renderDataTable({
     mu_A = c(input$mu_c1_A, input$mu_c2_A)
     sd_A = c(input$sd_c1_A, input$sd_c2_A)
@@ -478,23 +496,16 @@ shinyServer(function(input, output, session) {
                    })
     
     data.frame(
-      Condition = "A",
-      Category = ifelse(cat_labels_A, c1, c2),
+      condition = "A",
+      category = ifelse(cat_labels_A, c1, c2),
       cue = cue_A) %>%
       rbind(
         data.frame(
-          Condition = "B",
-          Category = ifelse(cat_labels_B, c1, c2),
+          condition = "B",
+          category = ifelse(cat_labels_B, c1, c2),
           cue = cue_B)
       )
   }, options = list(lengthMenu = c(25, 50, 100), pageLength = 25))
-  
-#  output$p.empirical.density <- renderPlot({
-#    ggplot(input$t.data_rows_selected, aes(x = VOT, fill=Category)) +
-#      geom_density() +
-#      scale_colour_manual("Category", values = c('/b/' = ggplotColours(2)[1], '/p/'=ggplotColours(2)[2])) + 
-#      ylab("Density") + xlab("VOT (ms)") + theme(axis.title.x=element_blank(), legend.position = "none")
-#  })
   
   
 #   output$plotMyCow <- renderPlot({

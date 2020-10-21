@@ -229,7 +229,7 @@ shinyUI(
                               min = 1,
                               value = value_n_exposure)),
                column(8, offset = 1,
-                 plotOutput('p.empirical.density', height = h),
+                 plotOutput('p.exposure.density', height = h),
                  dataTableOutput('t.data'))))),
     tabPanel("Belief-updating", 
              h4("Updating beliefs and categorization based on incrementally presented data"),
