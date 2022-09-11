@@ -32,5 +32,5 @@ value_epsilon = 50
 
 min_cue = -10
 max_cue = 90
-step_cue = (max_cue - min_cue) / 50
+step_cue = (max_cue - min_cue) / 301
 max_sd = 50

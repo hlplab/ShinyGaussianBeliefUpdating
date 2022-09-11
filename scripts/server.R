@@ -276,8 +276,9 @@ shinyServer(function(input, output, session) {
     lapse_bias = if (!is.null(input$lapse_bias)) { input$lapse_bias } else { input$prior_c1 }
 
     # get boundary
+    xs_between_means <- xs[which(between(xs, mu_c1, mu_c2))]
     ys = get_categorization(
-      xs, 
+      xs_between_means, 
       mu_c1 = mu_c1, 
       sd_c1 = sqrt(sd_c1^2 + sd_noise^2), 
       mu_c2 = mu_c2, 
@@ -285,7 +286,7 @@ shinyServer(function(input, output, session) {
       prior_c1 = prior_c1,
       lapse_rate = lapse_rate,
       lapse_bias = lapse_bias)
-    x_boundary = xs[which(abs(.5 - ys) == min(abs(.5 - ys)))]
+    x_boundary <- xs_between_means[which(abs(.5 - ys) == min(abs(.5 - ys)))]
 
     ggplot(data.frame(xs), aes(x = xs)) + 
       stat_function(
@@ -299,20 +300,22 @@ shinyServer(function(input, output, session) {
           lapse_rate = lapse_rate,
           lapse_bias = lapse_bias),
       color = ggplotColours(2)[1]) +
+      { if (between(x_boundary, min(xs), max(xs)))
+        list(
       geom_segment(
         x = x_boundary, xend = x_boundary,
         y = .5, yend = 0,
-        linetype = 3, size = .5, color = "darkgray") +
+        linetype = 3, size = .5, color = "darkgray"),
       geom_segment(
         x = min(xs), xend = x_boundary,
         y = .5, yend = .5,
-        linetype = 3, size = .5, color = "darkgray") +
+        linetype = 3, size = .5, color = "darkgray"),
       annotate(
         x = x_boundary, 
         y = 0, 
         geom = "text", 
         label = paste(round(x_boundary, 1), cue_unit, " "), 
-        color = "darkgray", hjust = 1, vjust = 0) +
+        color = "darkgray", hjust = 1, vjust = 0)) } +
       scale_x_continuous(
         cue,
         expand = c(0,0)) +
