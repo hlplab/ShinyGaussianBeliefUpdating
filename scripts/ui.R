@@ -130,7 +130,7 @@ shinyUI(
              
              fluidRow(
                column(4,
-                      div("This tab illustrates Bayesian inference over noisy perceptual input for discimination (e.g,. Feldman et al., 2009)."),
+                      div("This tab illustrates Bayesian inference over noisy perceptual input for perceptual discrimination (e.g,. Feldman et al., 2009)."),
                       br(),
                       plotOutput('p.prior.discrimination', height = h), 
                       plotOutput('p.means.sds.discrimination', height = 2 * h)),
