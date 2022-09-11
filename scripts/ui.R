@@ -99,26 +99,50 @@ shinyUI(
   hr(),
   
   tabsetPanel(
-    tabPanel("Noisy perception",
+    tabPanel("Categorization",
              
              fluidRow(
                column(4,
-                      div("This tab illustrates Bayesian inference over noisy perceptual input for both categorization/identification 
-                          (e.g., Clayards et al., 2008) and discimination (e.g,. Feldman et al., 2009)."),
+                      div("This tab illustrates Bayesian inference over noisy perceptual input for categorization 
+                          (e.g., Clayards et al., 2008)."),
                       br(),
-                      plotOutput('p.prior', height = h), 
-                      plotOutput('p.means.sds', height = 2 * h)),
+                      plotOutput('p.prior.categorization', height = h), 
+                      plotOutput('p.means.sds.categorization', height = 2 * h)),
                column(8,
-                      plotOutput('p.likelihood', height = h),
-                      plotOutput('p.likelihood.noise', height = h),
-                      plotOutput('p.unnormalized.posterior', height = h),
+                      plotOutput('p.likelihood.categorization', height = h),
+                      plotOutput('p.likelihood.noise.categorization', height = h),
+                      plotOutput('p.unnormalized.posterior.categorization', height = h),
                       
-                      h4("Ideal identification"),
-                      plotOutput('p.categorization', height = h),
+                      h4("Ideal categorization"),
+                      plotOutput('p.categorization', height = h))),
+             # fluidRow(
+             #   column(4,
+             #          numericInput('n_tokens', 'Sample tokens to classify:', 
+             #                       min = 0,
+             #                       value = 50, 
+             #                       step = 1),
+             #          plotOutput('p.tokens.categorization', height = h)),
+             #   column(8,
+             #          h4("Categorization accuracy")))
+             ),
+    
+    tabPanel("Discrimination",
+             
+             fluidRow(
+               column(4,
+                      div("This tab illustrates Bayesian inference over noisy perceptual input for discimination (e.g,. Feldman et al., 2009)."),
+                      br(),
+                      plotOutput('p.prior.discrimination', height = h), 
+                      plotOutput('p.means.sds.discrimination', height = 2 * h)),
+               column(8,
+                      plotOutput('p.likelihood.discrimination', height = h),
+                      plotOutput('p.likelihood.noise.discrimination', height = h),
+                      plotOutput('p.unnormalized.posterior.discrimination', height = h),
                       
                       h4("Ideal discrimination"),
                       plotOutput('p.warping', height = h),
                       plotOutput('p.discrimination', height = h)))),
+    
     tabPanel("Specify exposure", 
 
              fluidRow(

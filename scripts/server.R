@@ -105,11 +105,11 @@ shinyServer(function(input, output, session) {
     }
   })
    
-  # UI output elements ------------------------------------------------------------
-  output$p.prior <- renderPlot({
+  # reactives  ------------------------------------------------------------
+  currentPrior <- reactive({
     prior_c1 = input$prior_c1
     prior_c2 = 1 - input$prior_c1
-
+    
     priors = data.frame(Category = c(c1, c2), 
                         Prior = c(prior_c1, 
                                   1 - prior_c1))
@@ -121,8 +121,8 @@ shinyServer(function(input, output, session) {
         axis.title.x = element_blank(),
         legend.position = "none")
   })
- 
-  output$p.means.sds <- renderPlot({
+  
+  currentMeansSDs <- reactive({
     mu_c1 = input$mu_c1
     mu_c2 = input$mu_c2
     sd_c1 = input$sd_c1
@@ -132,20 +132,19 @@ shinyServer(function(input, output, session) {
       Category = c(c1, c2), 
       mean = c(mu_c1, mu_c2),
       sd = c(sd_c1, sd_c2)) %>%
-    ggplot(aes(
-      x = mean, 
-      y = sd, 
-      color = Category,
-      label = Category)) +
+      ggplot(aes(
+        x = mean, 
+        y = sd, 
+        color = Category,
+        label = Category)) +
       geom_text(fontface = "bold") +
       ggtitle("Category likelihoods") + 
-      scale_x_continuous(paste("mean", cue)) +
+      scale_x_continuous(paste("mean", cue), limits = range(xs)) +
       scale_y_continuous(paste("SD", cue), expand = c(.2,.2)) +
       theme(legend.position = "none") 
-  })  
+  })
   
-  # Cue distributions ------------------------------------------------------ 
-  output$p.likelihood <- renderPlot({
+  currentLikelihood_woNoise <- reactive({
     mu_c1 = input$mu_c1
     mu_c2 = input$mu_c2
     sd_c1 = input$sd_c1
@@ -167,9 +166,9 @@ shinyServer(function(input, output, session) {
       scale_x_continuous(expand = c(0,0)) +
       scale_y_continuous("Likelihood\n(w/o noise)") + 
       theme(axis.title.x = element_blank(), legend.position = "none")
-  })  
+  })
   
-  output$p.likelihood.noise <- renderPlot({
+  currentLikelihood_wNoise <- reactive({
     mu_c1 = input$mu_c1
     mu_c2 = input$mu_c2
     sd_c1 = input$sd_c1
@@ -192,9 +191,9 @@ shinyServer(function(input, output, session) {
       scale_x_continuous(expand = c(0,0)) +
       scale_y_continuous("Likelihood\n(w noise)") + 
       theme(axis.title.x = element_blank(), legend.position = "none")
-  })  
-
-  output$p.unnormalized.posterior <- renderPlot({
+  })
+  
+  currentUnnormalizedPosterior <- reactive({
     prior_c1 = input$prior_c1
     mu_c1 = input$mu_c1
     mu_c2 = input$mu_c2
@@ -223,10 +222,49 @@ shinyServer(function(input, output, session) {
       scale_y_continuous("Unnormalized\nposterior") + 
       theme(
         legend.position = "none")
-    
-  })  
+  })
   
   # Categorization ===============================================================
+  output$p.prior.categorization <- renderPlot({
+    currentPrior()
+  })
+ 
+  output$p.means.sds.categorization <- renderPlot({
+    currentMeansSDs()
+  })  
+  
+  # Cue distributions ------------------------------------------------------ 
+  output$p.likelihood.categorization <- renderPlot({
+    currentLikelihood_woNoise()
+  })  
+  
+  output$p.likelihood.noise.categorization <- renderPlot({
+    currentLikelihood_wNoise()
+  })  
+
+  output$p.unnormalized.posterior.categorization <- renderPlot({
+    currentUnnormalizedPosterior()
+  })  
+  
+  output$p.tokens.categorization <- renderPlot({
+    crossing(
+      token = 1:input$n_tokens,
+      category = c(c1, c2)) %>%
+      mutate(
+        cue = rnorm(
+          nrow(.), 
+          mean = ifelse(category == c1, input$mu_c1, input$mu_c2),
+          sd = ifelse(category == c1, input$sd_c1, input$sd_c2))) %>%
+      ggplot(aes(x = cue, fill = category)) +
+      geom_histogram() +
+      scale_fill_manual(
+        "Category", 
+        breaks = c(c1, c2),
+        values = c(ggplotColours(2)[1], ggplotColours(2)[2])) + 
+      scale_x_continuous(cue, limits = range(xs)) +
+      theme(legend.position = "none")
+  })
+  
   output$p.categorization <- renderPlot({
     prior_c1 = input$prior_c1
     mu_c1 = input$mu_c1
@@ -284,6 +322,27 @@ shinyServer(function(input, output, session) {
   })  
   
   # Perceptual discrimination ===================================================== 
+  output$p.prior.discrimination <- renderPlot({
+    currentPrior()
+  })
+  
+  output$p.means.sds.discrimination <- renderPlot({
+    currentMeansSDs()
+  })  
+  
+  # Cue distributions ------------------------------------------------------ 
+  output$p.likelihood.discrimination <- renderPlot({
+    currentLikelihood_woNoise()
+  })  
+  
+  output$p.likelihood.noise.discrimination <- renderPlot({
+    currentLikelihood_wNoise()
+  })  
+  
+  output$p.unnormalized.posterior.discrimination <- renderPlot({
+    currentUnnormalizedPosterior()
+  })  
+  
   output$p.warping <- renderPlot({
     prior_c1 = input$prior_c1
     mu_c1 = input$mu_c1
