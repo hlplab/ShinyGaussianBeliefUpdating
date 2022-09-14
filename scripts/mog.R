@@ -1,5 +1,6 @@
 library(tidyverse)
 library(animation)
+library(gganimate)
 
 # Basic parameter
 true_mu_1 <- 5
@@ -70,41 +71,73 @@ update_mog <- function(mog, x, wta = FALSE, prune.phi_threshold = 10^-32) {
 # print(mog)
 
 # Visualize a MoG
-plot_mog <- function(mog, limits = c(-100, 100)) {
-  fs <- pmap(
-    .l = list(mog$phi, mog$mu, mog$sigma), 
-    .f = function(x, y, z) stat_function(
-      fun = ~ x * dnorm(.x, mean = y, sd = z),
-      color = "gray"))
-  
-  tibble(x = seq(limits[1], limits[2], length.out = 301)) %>%
-    ggplot(aes(x = x)) +
-    fs +
-    stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_1, sd = true_sigma_1), color = "red") +
-    stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_2, sd = true_sigma_2), color = "blue") +
-    scale_x_continuous("VOT (in msec)") +
-    scale_y_continuous("density") +
-    theme_bw()
+plot_mog <- function(mog, x_axis = seq(-100, 100, length.out = 301), animate_by = NULL) {
+  suppressWarnings(
+    mog %>%
+      # Unnest if necessary
+      { if (!("mu" %in% names(.))) unnest(., cols = c(mog)) else . } %>%
+      # Cross with x-axis data
+      crossing(x_axis = x_axis) %>%
+      # Calculate y
+      mutate(y = pmap(
+        .l = list(x_axis, phi, mu, sigma), 
+        .f = function(x_axis, phi, mu, sigma) y = phi * dnorm(x = x_axis, mean = mu, sd = sigma)) %>% unlist()) %>%
+      # Plot
+      ggplot(aes(x = x_axis, y = y)) +
+      geom_line(aes(group = k), color = "gray") +
+      stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_1, sd = true_sigma_1), color = "red") +
+      stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_2, sd = true_sigma_2), color = "blue") +
+      scale_x_continuous("VOT (in msec)") +
+      scale_y_continuous("density") +
+      { if (!is.null(animate_by)) 
+        transition_states(
+          states = !! sym(animate_by), 
+          transition_length = 1/5, 
+          state_length = 1/5) } +
+      facet_wrap(~ mog_id) +
+      theme_bw())
 }
 
 # Test visualization
-# mog %>%
-#   group_by(mog_id) %>%
-#   # Unnest if necessary
-#   { if (!("mu" %in% names(.))) unnest(., cols = c(mog)) else . } %>%
-#   group_map(.f = ~ plot_mog(.x))
+mog %>%
+  plot_mog(animate_by = "mog_id")
 
 # Update MoG with learning data
 d <- 
   crossing(
     input, 
     mog %>%
-      nest(mog = -c(mog_id))) %>%
+      { if ("mu" %in% names(mog)) nest(-c(mog_id)) else . }) %>%
   arrange(mog_id, n)
 
 for (i in 1:N) {
   d[d$n == i,]$mog[[1]] <- update_mog(d[d$n == i - 1,]$mog[[1]], d[d$n == i,]$x)
 }
+
+
+## Using gganimate instead of animation
+d.plot <- d %>% filter(n < 10)
+
+p <- d.plot %>%
+  plot_mog(animate_by = "n") +
+  geom_rug(
+    data = d.plot, 
+    mapping = aes(x = x, color = category), 
+    inherit.aes = FALSE,
+    alpha = .5) +
+  scale_color_manual(values = c("red", "blue")) 
+
+fibonacci <- function(n, concat = T) {
+  if(n <= 1) {
+    return(n)
+  } else {
+    prev <- fibonacci(n - 1, concat = concat)
+    f <- if (concat) c(prev, prev + fibonacci(n - 2, concat = FALSE)) else prev + fibonacci(n - 2, concat = FALSE)
+    return(f)
+  }
+}
+
+fibonacci(10)
 
 # Make a movie out of the updates
 # requires Magick installation
@@ -117,7 +150,8 @@ saveGIF({
     p <- plot_mog(d[d$n == i,]$mog[[1]]) +
       geom_rug(
         data = d %>% filter(between(n, j, i)), 
-        mapping = aes(color = category), 
+        mapping = aes(x = x, color = category), 
+        inherit.aes = FALSE,
         alpha = .5) +
       scale_color_manual(values = c("red", "blue")) +
       ggtitle(paste("Observations", j, "to", i))
@@ -138,7 +172,8 @@ saveVideo({
     p <- plot_mog(d[d$n == i,]$mog[[1]]) +
       geom_rug(
         data = d %>% filter(between(n, j, i)), 
-        mapping = aes(color = category), 
+        mapping = aes(x = x, color = category), 
+        inherit.aes = FALSE,
         alpha = .5) +
       scale_color_manual(values = c("red", "blue")) +
       ggtitle(paste("Observations", j, "to", i))
