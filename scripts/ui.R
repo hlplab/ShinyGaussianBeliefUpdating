@@ -99,6 +99,11 @@ shinyUI(
   hr(),
   
   tabsetPanel(
+    # tabPanel("Debugging",
+    #          fluidRow(
+    #            column(12,
+    #                   verbatimTextOutput("info")))
+    # ),
     tabPanel("Categorization",
              
              fluidRow(
@@ -115,15 +120,16 @@ shinyUI(
                       
                       h4("Ideal categorization"),
                       plotOutput('p.categorization', height = h))),
-             # fluidRow(
-             #   column(4,
-             #          numericInput('n_tokens', 'Sample tokens to classify:', 
-             #                       min = 0,
-             #                       value = 50, 
-             #                       step = 1),
-             #          plotOutput('p.tokens.categorization', height = h)),
-             #   column(8,
-             #          h4("Categorization accuracy")))
+             fluidRow(
+               column(4,
+                      numericInput('n_tokens', 'Sample tokens to classify:',
+                                   min = 1,
+                                   value = 50,
+                                   step = 1),
+                      plotOutput('p.tokens.categorization', height = h)),
+               column(4,
+                      h4("Categorization accuracy"),
+                      plotOutput('p.accuracy.categorization', height = h)))
              ),
     
     tabPanel("Discrimination",
