@@ -485,7 +485,7 @@ io.VOT_f0_MVG.normalized <-
 
 (ref:io-accuracy) Prediction accuracy of ideal observers that were either fit over the raw (unnormalized) or C-CuRE normalized VOT (in msec) and f0 (in Mel). Luce choice rule (Luce, 1968) was used to obtain the expected accuracy in predicting the actual category labels observed in the production data from Chodroff & Wilson (2018).
 
-```{r io-accuracy, fig.width=base.width * 1 + 1, fig.height = base.height, fig.cap=c("(ref:io-accuracy)")}
+```{r io-accuracy, fig.width=base.width * 2 + 1, fig.height = base.height, fig.cap=c("(ref:io-accuracy)")}
 d.chodroff_wilson.selected %>% 
   mutate(x = map2(VOT, f0_Mel, ~ cbind(.x, .y))) %>%
   mutate(
@@ -511,9 +511,9 @@ d.chodroff_wilson.selected %>%
           pull(response),
         posterior = ifelse(category == "/d/", posterior.d, 1 - posterior.d),
         IO.type = "normalized")) %>%
-  ggplot(aes(x = voicing, y = posterior, color = voicing, linetype = IO.type)) +
+  ggplot(aes(x = voicing, y = posterior, color = voicing, shape = IO.type)) +
   scale_y_continuous("Accuracy") +
-  scale_linetype_discrete("Cues") +
+  scale_shape_discrete("Cues") +
   stat_summary(fun.data = mean_cl_boot, geom = "pointrange", position = position_dodge(.1)) +
   scale_color_manual("Voiced", breaks = c("yes", "no"), values = colors.voicing) +
   coord_cartesian(ylim = c(.85, 1))
