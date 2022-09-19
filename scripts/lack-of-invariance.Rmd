@@ -1,0 +1,520 @@
+---
+title: "Demonstration of lack of invariance problem"
+author: "T. Florian Jaeger"
+date: "2022-09-19"
+header-includes: 
+ - \usepackage{animate}
+ - \usepackage{amsmath}
+ - \usepackage{tikz}
+ - \usetikzlibrary{bayesnet}
+ - \usepackage{booktabs}
+ - \usepackage{siunitx}
+ - \usepackage{soul}
+ - \usepackage{tabto}
+ - \usepackage{xcolor}
+ - \usepackage{placeins}
+ - \setstcolor{red}
+ - \usepackage{sectsty}
+ - \sectionfont{\color{black}}
+ - \subsectionfont{\color{black}}
+ - \subsubsectionfont{\color{black}}
+ - \usepackage{setspace}\doublespacing
+ - \usepackage{subfig}
+output: 
+  bookdown::pdf_document2:
+    latex_engine: xelatex
+    extra_dependencies: "subfig" 
+---
+
+```{r libraries, include=FALSE, message=FALSE}
+library(tidyverse)
+library(magrittr)           # pipes
+
+library(linguisticsdown)    # IPA symbols
+library(cowplot)            # combining plots
+library(gganimate)          # animations
+
+library(lme4)               # for C-CuRE normalization through regression
+library(diptest)            # test for bimodality
+
+library(MVBeliefUpdatr)     # for ideal observers and adaptors 
+```
+
+```{r constants-general, include=FALSE}
+colors.voicing = c("blue", "red")
+```
+
+```{r functions-general, include=FALSE}
+myGplot.defaults = function(
+  type = c("paper","poster","slides")[1],
+  base_size = if (type == "paper") { 10 } else if (type == "slides") { 32 } else if (type == "poster") { 36 } else { 10 }, 
+  margin=c("t" = 0.6, "r" = 0.5, "b" = 0.5, "l" = 0.3),
+  set_theme = T
+)
+{
+  require(ggplot2)
+  
+  if (set_theme) {
+    theme_set(theme_bw(base_size=base_size))
+    theme_update(
+      axis.text.x = element_text(size=base_size, vjust=1),
+      axis.text.y = element_text(size=base_size, hjust=1, vjust=.5),
+      axis.title.x = element_text(size=base_size , vjust=0, hjust=0.5, face = "bold"), 
+      axis.title.y = element_text(size=base_size, hjust= 0.5, vjust=0.5, face = "bold"), 
+      strip.text = element_text(size=base_size, color = "white"),
+      strip.background = element_rect(fill = "black", color = "black"),
+      legend.title = element_text(size=base_size, face = "bold", hjust= 0), 
+      legend.text = element_text(size=base_size),
+      plot.margin = unit(margin, "lines")
+    )
+  } else {
+    return(
+      theme(
+        axis.text.x = element_text(size=base_size, vjust=1),
+        axis.text.y = element_text(size=base_size, hjust=1, vjust=.5),
+        axis.title.x = element_text(size=base_size , vjust=0, hjust=0.5, face = "bold"), 
+        axis.title.y = element_text(size=base_size, hjust= 0.5, vjust=0.5, face = "bold"), 
+        strip.text = element_text(size=base_size, color = "white"),
+        strip.background = element_rect(fill = "black", color = "black"),
+        legend.title = element_text(size=base_size, face = "bold", hjust= 0), 
+        legend.text = element_text(size=base_size),
+        plot.margin = unit(margin, "lines")))
+  }
+}
+
+get_plot_limits <- function(plot) {
+  gb = ggplot_build(plot)
+  xmin = gb$layout$panel_params[[1]]$x.range[1]
+  xmax = gb$layout$panel_params[[1]]$x.range[2]
+  ymin = gb$layout$panel_params[[1]]$y.range[1]
+  ymax = gb$layout$panel_params[[1]]$y.range[2]
+  list(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax)
+}
+
+# C-CuRE normalization 
+apply_ccure <- function(x, data) {
+  x - predict(lmer(x ~ 1 + (1 | Talker), data = data), random.only = T)
+}
+
+# Make IO out of MVG
+make_stop_VOTf0_ideal_observer <- function(
+  m,
+  prior = rep(1 / nrow(m), nrow(m)),
+  lapse_rate = 0, 
+  lapse_bias = rep(1 / nrow(m), nrow(m)),
+  Sigma_noise = matrix(c(80, 0, 0, 878), ncol = 2, dimnames = list(names(first(m$mu)), names(first(m$mu))))
+) { 
+  message("By default, using noise estimates from Kronrod et al. (2016). Mel noise estimates are taken from their vowel studies.")
+  m %>%
+    lift_MVG_to_MVG_ideal_observer(
+      Sigma_noise = Sigma_noise,
+      prior = prior,
+      lapse_rate = lapse_rate,
+      lapse_bias = lapse_bias)
+}
+
+get_path <- function(filename) return(paste0("", filename))
+
+# For plotting
+myGplot.defaults("paper")
+```
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE, warning = TRUE, 
+  results = "markup", cache = TRUE,
+  interval = .2,
+  fig.path = get_path("../figures/knitted/"), fig.align = "center", fig.height = 2.5, fig.width = 2.5)
+
+knitr::knit_hooks$set(inline = function(x) {
+  prettyNum(x, big.mark=",")
+})
+
+knitr::knit_hooks$set(document = function(x) {sub('\\usepackage[]{color}', '\\usepackage{xcolor}', x, fixed = TRUE)})
+color_block = function(color) { function(x, options) sprintf('\\color{%s}\\begin{verbatim}%s\\end{verbatim}\\color{black}', color, x) }
+knitr::knit_hooks$set(error = color_block('red'))
+knitr::knit_hooks$set(warning = color_block('orange'))
+
+options(width = 200, digits = 2, OutDec = ".", tinytex.verbose = TRUE)
+base.width = 2.15
+base.height = 2.15
+```
+
+```{r analysis-preferences}
+# Seed for random number generation
+set.seed(42007)
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+# Goals
+
+ 1. Illustrate lack of invariance
+ 2. Illustrate consequence of a common normalization approach (combining extrinsic and intrinsic factors)
+ 
+# Load data
+
+```{r, include=FALSE}
+max.f0 <- 350            # max raw f0
+min.observation.n <- 25  # min observation per stop
+max.p <- .1              # cut-off for rejection of unimodality
+
+d.chodroff_wilson <- read_csv(get_path("../data/Chodroff-Wilson-2018/all_observations_with_non-missing_vot_cog_f0.csv")) %>%
+  rename(category = stop, VOT = vot, f0 = usef0, Talker = subj, Word = word, Trial = trial, Vowel = vowel) %>%
+  mutate(
+    category = 
+      plyr::mapvalues(
+        category,
+        c("B", "D", "G", "P", "T", "K"),
+        c("/b/", "/d/", "/g/", "/p/", "/t/", "/k/")),
+    gender = factor(
+      plyr::mapvalues(
+        gender, 
+        c("F", "M"),
+        c("female", "male")),
+      levels = c("male", "female")),
+    poa = factor(
+      plyr::mapvalues(
+        poa, 
+        c("lab", "cor", "dor"),
+        c("/b/-/p/", "/d/-/t/", "/g/-/k/")),
+      levels = c("/b/-/p/", "/d/-/t/", "/g/-/k/")),
+    voicing = factor(
+      ifelse(category %in% c("/b/", "/d/", "/g/"), "yes", "no"),
+      levels = c("yes", "no"))) %>%
+  mutate(across(c(Talker, Word, gender, category), factor)) %>%
+  select(Talker, Word, Trial, Vowel, gender, category, poa, voicing, VOT, f0)
+
+# Filter f0 above 500 Hz
+d.chodroff_wilson %<>%
+  filter(f0 < max.f0)
+
+# Keep only subjects with at last n.min observations for each stop
+d.chodroff_wilson %<>%
+  group_by(Talker, category) %>%
+  mutate(n = length(category)) %>%
+  group_by(Talker) %>%
+  mutate(n = ifelse(any(is.na(n)), 0, min(n))) %>%
+  ungroup() %>%
+  filter(n > min.observation.n)
+
+# Identify and remove talkers with bimodal f0 distributions (indicating pitch halving/doubling)
+d.chodroff_wilson %<>%
+  group_by(Talker) %>%
+  mutate(f0_Mel = phonR::normMel(f0)) %>%
+  group_by(Talker, category) %>%
+  mutate(
+    f0.multimodal = dip.test(f0)$p.value < .1,
+    f0_Mel.multimodal = dip.test(f0_Mel)$p.value < .1) %>%
+  filter(!f0.multimodal, !f0.multimodal) %>%
+  droplevels()
+
+# Get Mel and Semitones, then C-CuRE
+d.chodroff_wilson %<>%
+  group_by(Talker) %>%
+  mutate(
+    f0_Mel = phonR::normMel(f0),
+    f0_semitones = 12 * log(f0 / mean(f0)) / log(2)) %>%
+  ungroup() %>%
+  mutate_at(
+      c("VOT", "f0", "f0_Mel", "f0_semitones"),
+      list("centered" = function(x) apply_ccure(x, data = .)))
+```
+
+We are using Chodroff & Wilson's (2018) database of word-initial stop voicing productions by L1 US English talkers. After outlier exclusion, this left `r nrow(d.chodroff_wilson)` observations from `r nlevels(d.chodroff_wilson$Talker)` different talkers and `r nlevels(d.chodroff_wilson$Word)` words. The database contains additional annotations but for the present purpose we focus on the voice onset time (VOT in msec) and the f0 (in Mel, a log-transform of Hz that is assumed to more closely resemble how the human brain organizes frequency information). 
+
+```{r chodroff-parameters}
+n.subj <- 6
+seed <- 59876
+```
+
+# Visualize lack of invariance
+Figure \@ref(fig:chodroff-stop-VOT-f0ST) shows `r n.subj` randomly selected talkers from this data set. Figures \@ref(fig:chodroff-stop-VOT-f0ST-mu) and \@ref(fig:chodroff-stop-VOT-f0ST-sigma) further illustrate the degree of cross-talker variability prior to normalization by plotting all talkers' category means and variances.
+
+(ref:chodroff-stop-VOT-f0ST) Unormalized VOT and f0 of word-initial stop consonants in L1 US English from `r n.subj` random talkers in the corpus (Chodroff & Wilson, 2018). Transparent points show individual tokens, which cover a large range of different phonotactic, lexical, and utterance contexts. Solid points show talker-specific means over these tokens, connected by a gray line. Ellipses show the 95% probability mass for talker-specific bivariate Gaussian categories. 
+
+```{r chodroff-stop-VOT-f0ST, fig.width=base.width * 3 + 1, fig.height = base.height * 9, fig.cap=c("(ref:chodroff-stop-VOT-f0ST)")}
+talkers <- sample(unique(d.chodroff_wilson$Talker), n.subj, replace = F)
+
+p.talkers <- d.chodroff_wilson %>% 
+  # Keep random subject of subjects
+  ungroup() %>%
+  filter(Talker %in% talkers) %>%
+  ggplot(aes(x = VOT, y = f0_Mel, color = voicing, shape = gender)) +
+  geom_point(alpha = .1) +
+  stat_ellipse() +
+  scale_x_continuous(expression("VOT (ms)")) +
+  scale_y_continuous(expression("f0 (Mel)")) +
+  scale_color_manual("Voiced", breaks = c("yes", "no"), values = colors.voicing) +
+  scale_shape_discrete("Gender") +
+  scale_size_continuous("n", range = c(.1, 3)) +
+  facet_grid(Talker ~ poa) 
+
+p.talkers +
+  geom_line(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT, f0_Mel),
+        mean),
+    mapping = aes(group = Talker),
+    alpha = .9, size = .3, color = "gray") +
+  geom_point(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT, f0_Mel),
+        mean),
+    alpha = .9)
+```
+
+(ref:chodroff-stop-VOT-f0ST-mu) By-talker means of VOT and f0 for all six stop consonants and all `r nlevels(d.chodroff_wilson$Talker)` talkers in the corpus (Chodroff & Wilson, 2018) for which all phonetic cues were available. 
+
+```{r chodroff-stop-VOT-f0ST-mu, fig.width=base.width * 3 + 1, fig.height = base.height, fig.cap=c("(ref:chodroff-stop-VOT-f0ST-mu)")}
+p.means <-
+  d.chodroff_wilson %>% 
+  ggplot(aes(x = VOT, y = f0_Mel, color = voicing)) +
+  scale_x_continuous(expression("VOT (ms)")) +
+  scale_y_continuous(expression("f0 (Mel)")) +
+  scale_color_manual("Voiced", breaks = c("yes", "no"), values = colors.voicing) +
+  scale_shape_discrete("Gender") +
+  scale_size_continuous("n", range = c(.1, 3)) +
+  facet_grid(. ~ poa)
+
+p.means +
+  geom_line(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT, f0_Mel),
+        mean),
+    mapping = aes(group = Talker),
+    alpha = .1, size = .3, color = "gray") +
+  geom_point(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT, f0_Mel),
+        mean),
+    mapping = aes(shape = gender),
+    alpha = .3)
+```
+
+(ref:chodroff-stop-VOT-f0ST-sigma) Same as \@ref(fig:chodroff-stop-VOT-f0ST-mu) but for the category variances.
+
+```{r chodroff-stop-VOT-f0ST-sigma, fig.width=base.width * 3 + 1, fig.height = base.height, fig.cap=c("(ref:chodroff-stop-VOT-f0ST-sigma)")}
+p.means +
+  geom_line(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT, f0_Mel),
+        var),
+    mapping = aes(group = Talker),
+    alpha = .1, size = .3, color = "gray") +
+  geom_point(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT, f0_Mel),
+        var),
+    mapping = aes(shape = gender),
+    alpha = .3)
+```
+
+# Visualize effects of normalization
+Figure \@ref(fig:demonstrate-normalization) visualizes the effects of C-CuRE normalization on the marginal distributions of f0 and VOT to word-initial stop voicing in L1 US English. 
+
+(ref:demonstrate-normalization) Effects of applying C-CuRE normalization to productions of word-initial stop voicing in US English. **Panel A:** unnormalized VOT and f0. VOT is the primary cue to this voicing contrast for L1 US English, and f0 is known to be a secondary cue. The data exhibit clear evidence of multimodality along both VOT and f0. **Panel B:** the same productions but after C-CuRE normalization has been applied to remove talker-specific variability. Compared to unnormalized data, the C-CuRE normalized data exhibits reduced variability and reduced evidence of multimodality (the remaining low-f0 outliers in the Panel B are the result of creaky voice and measurement errors like pitch-halving). 
+
+```{r demonstrate-normalization, fig.width= base.width * 3, fig.height = base.height * 2 + 2, fig.cap="(ref:demonstrate-normalization)"}
+p <- 
+  d.chodroff_wilson %>% 
+  ggplot(aes(x = VOT, y = f0_Mel, color = voicing)) +
+  scale_x_continuous(expression("VOT (ms)")) +
+  scale_y_continuous(expression("f0 (Mel)")) +
+  scale_color_manual("Voiced", breaks = c("yes", "no"), values = colors.voicing) +
+  facet_grid(. ~ poa) + 
+  guides(colour = guide_legend(override.aes = list(alpha = 1)), shape = guide_legend(override.aes = list(alpha = 1))) + 
+  theme(legend.position = "top")
+
+p1 <- 
+  p + 
+  geom_point(
+    mapping = aes(shape = gender),
+    alpha = .05) +
+  scale_shape_discrete("Gender") 
+
+limits <- get_plot_limits(p1)
+p2 <-   
+  p1 + theme(legend.position = "none", plot.margin = margin(t = -50)) +
+  aes(x = VOT_centered, y = f0_Mel_centered) +
+  coord_cartesian(xlim = c(limits$xmin, limits$xmax), ylim = c(limits$ymin, limits$ymax))
+
+plot_grid(
+  plotlist = list(p1, p2), 
+  nrow = 2, labels = c("A)", "B)"),
+  align = "h",
+  axis = "lrtb")
+```
+
+Additionally, Figures \@ref(fig:chodroff-stop-VOT-f0ST-normalized) - \@ref(fig:chodroff-stop-VOT-f0ST-sigma-normalized) replot Figures \@ref(fig:chodroff-stop-VOT-f0ST) - \@ref(fig:chodroff-stop-VOT-f0ST-sigma) after C-CuRE (McMurray & Jongman, 2011) normalization has been applied.
+
+(ref:chodroff-stop-VOT-f0ST-normalized) Same as Figure \@ref(fig:chodroff-stop-VOT-f0ST) but for normalized VOT and f0. Normalization does not affect the relative placement of tokens within the talker's space but it does affect the absolute placement. This is also evident in Figure \@ref(fig:chodroff-stop-VOT-f0ST-mu-normalized)
+
+```{r chodroff-stop-VOT-f0ST-normalized, fig.width=base.width * 3 + 1, fig.height = base.height * 9, fig.cap=c("(ref:chodroff-stop-VOT-f0ST-normalized)")}
+p.talkers + 
+  aes(x = VOT_centered, y = f0_Mel_centered) +
+  geom_line(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT_centered, f0_Mel_centered),
+        mean),
+    mapping = aes(group = Talker),
+    alpha = .9, size = .3, color = "gray") +
+  geom_point(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT_centered, f0_Mel_centered),
+        mean),
+    alpha = .9)
+```
+
+(ref:chodroff-stop-VOT-f0ST-mu-normalized) Same as Figure \@ref(fig:chodroff-stop-VOT-f0ST-mu-normalized) but for normalized VOT and f0. The category means are now much more similar across talkers, and the correlation between the means of the voiced and voiceless categories along both VOT and f0 is now clearer (see also Idemaru & Holt, 2011).
+
+```{r chodroff-stop-VOT-f0ST-mu-normalized, fig.width=base.width * 3 + 1, fig.height = base.height, fig.cap=c("(ref:chodroff-stop-VOT-f0ST-mu-normalized)")}
+p.means +
+  aes(x = VOT_centered, y = f0_Mel_centered) +
+  geom_line(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT_centered, f0_Mel_centered),
+        mean),
+    mapping = aes(group = Talker),
+    alpha = .1, size = .3, color = "gray") +
+  geom_point(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT_centered, f0_Mel_centered),
+        mean),
+    mapping = aes(shape = gender),
+    alpha = .3)
+```
+
+(ref:chodroff-stop-VOT-f0ST-sigma-normalized) Same as Figure \@ref(fig:chodroff-stop-VOT-f0ST-sigma) but for normalized VOT and f0---both for the means and for the 95% ellipse. Unlike the category *means*, category variances are *not* affected by the particular type of normalization applied here (since it only uses centering, McMurray & Jongman, 2011): Figure \@ref(fig:chodroff-stop-VOT-f0ST-sigma-normalized) is identical to Figure Figure \@ref(fig:chodroff-stop-VOT-f0ST-sigma).
+
+```{r chodroff-stop-VOT-f0ST-sigma-normalized, fig.width=base.width * 3 + 1, fig.height = base.height, fig.cap=c("(ref:chodroff-stop-VOT-f0ST-sigma-normalized)")}
+p.means +
+  aes(x = VOT_centered, y = f0_Mel_centered) +
+  geom_line(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT_centered, f0_Mel_centered),
+        var),
+    mapping = aes(group = Talker),
+    alpha = .1, size = .3, color = "gray") +
+  geom_point(
+    data = . %>% 
+      group_by(Talker, gender, category, poa, voicing) %>% 
+      summarise_at(
+        vars(VOT_centered, f0_Mel_centered),
+        var),
+    mapping = aes(shape = gender),
+    alpha = .3)
+```
+
+
+# Evaluate consequences of normalization for recognition accuracy
+We make two ideal observer models that each describe /d/ and /t/ as a bivariate Gaussian distribution of VOT (in msec) and f0 (in Mel). The two ideal observers differ in that one is fit over the raw (unnormalized) cues and the other is fit over the C-CuRE normalized cues. Figure \@ref(fig:io-accuracy) shows the accuracy that these two ideal observers have in predicting the actual category label for each data point in Chodroff & Wilson (2018).
+
+```{r MVG-make-models}
+items <- c("DOLLARS","TOPIC","DOES","TUNNELS","DAUGHTER","TALKING","DIED","TIME","DEFINITELY", "TELL", "DAY","TAKE", "DEAL", "TEACHER","DON'T","TOTALLY","DO","TOO")
+
+# sample a balanced set of voiced and voiceless tokens for each place of articulation 
+# the specific number is determined by the min number of tokens per category for that contrast
+d.chodroff_wilson.selected <- 
+  d.chodroff_wilson %>%
+  filter(Word %in% items) %>%
+  group_by(Talker, category) %>%
+  mutate(n = n()) %>%
+  group_by(Talker) %>%
+  # subsample n tokens, as determined by category with fewer tokens
+  mutate(
+    n_min = min(n), 
+    n_category = n_distinct(category)) %>%
+  # select talkers with both /d/ and /t/ observations
+  filter(n_category == 2) %>% 
+  group_by(Talker, category) %>%
+  sample_n(size = first(n_min)) %>%
+  ungroup() %>%
+  mutate_at(
+      c("VOT", "f0", "f0_Mel", "f0_semitones"),
+      list("centered" = function(x) apply_ccure(x, data = .)))
+
+prior_marginal_VOT_f0_stats <- 
+  d.chodroff_wilson.selected %>%
+  group_by(Talker) %>%
+  summarise(across(c(VOT, f0_Mel), mean)) %>%
+  ungroup() %>%
+  summarise(
+    x_mean = list(c(VOT = mean(VOT), f0 = mean(f0_Mel))),
+    x_var_VOT = var(VOT),
+    x_var_f0 = var(f0_Mel),
+    x_cov = list(cov(cbind(VOT, f0_Mel))))
+
+cues <- c("VOT", "f0_Mel")
+io.VOT_f0_MVG.raw <- 
+  make_MVG_from_data(
+  data = d.chodroff_wilson.selected, 
+  category = "category",
+  cues = cues) %>%
+  make_stop_VOTf0_ideal_observer()
+
+cues <- c("VOT_centered", "f0_Mel_centered")
+io.VOT_f0_MVG.normalized <- 
+  make_MVG_from_data(
+  data = d.chodroff_wilson.selected, 
+  category = "category",
+  cues = cues) %>%
+  make_stop_VOTf0_ideal_observer()
+```
+
+(ref:io-accuracy) Prediction accuracy of ideal observers that were either fit over the raw (unnormalized) or C-CuRE normalized VOT (in msec) and f0 (in Mel). Luce choice rule (Luce, 1968) was used to obtain the expected accuracy in predicting the actual category labels observed in the production data from Chodroff & Wilson (2018).
+
+```{r io-accuracy, fig.width=base.width * 1 + 1, fig.height = base.height, fig.cap=c("(ref:io-accuracy)")}
+d.chodroff_wilson.selected %>% 
+  mutate(x = map2(VOT, f0_Mel, ~ cbind(.x, .y))) %>%
+  mutate(
+    posterior.d = 
+      get_categorization_from_MVG_ideal_observer(
+        x = x, 
+        model = io.VOT_f0_MVG.raw,
+        decision_rule = "proportional") %>%
+      filter(category == "/d/") %>%
+      pull(response),
+    posterior = ifelse(category == "/d/", posterior.d, 1 - posterior.d),
+    IO.type = "raw") %>%
+  bind_rows(
+    d.chodroff_wilson.selected %>% 
+      mutate(x = map2(VOT_centered, f0_Mel_centered, ~ cbind(.x, .y))) %>%
+      mutate(
+        posterior.d = 
+          get_categorization_from_MVG_ideal_observer(
+            x = x, 
+            model = io.VOT_f0_MVG.raw,
+            decision_rule = "proportional") %>%
+          filter(category == "/d/") %>%
+          pull(response),
+        posterior = ifelse(category == "/d/", posterior.d, 1 - posterior.d),
+        IO.type = "normalized")) %>%
+  ggplot(aes(x = voicing, y = posterior, color = voicing, linetype = IO.type)) +
+  scale_y_continuous("Accuracy") +
+  scale_linetype_discrete("Cues") +
+  stat_summary(fun.data = mean_cl_boot, geom = "pointrange", position = position_dodge(.1)) +
+  scale_color_manual("Voiced", breaks = c("yes", "no"), values = colors.voicing) +
+  coord_cartesian(ylim = c(.85, 1))
+```
