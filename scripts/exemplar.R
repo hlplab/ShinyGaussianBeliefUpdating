@@ -116,7 +116,7 @@ get_likelihood_from_exemplar_model <- function(
   
   likelihood <-
     model %>%
-    group_by(!!! syms(group), !! sym(category)) %>%
+    group_by(!! sym(category)) %>%
     unnest(cols = exemplars) %>%
     summarise(similarity = sum(map(exemplar, ~ get_similarity_between_exemplars(x, .x, log = log)) %>% unlist())) %>%
     mutate(activation = if (sum(similarity == 0)) 1 / length(similarity) else similarity / sum(similarity))
@@ -124,7 +124,7 @@ get_likelihood_from_exemplar_model <- function(
   return(likelihood)
 }
 
-get_likelihood_from_exemplar_model(x = c(1500, 2000), m)
+get_likelihood_from_exemplar_model(x = rbind( c(1500, 2000), c(800, 3500)), m)
 
 # Categorize a set of of tokens
 get_categorization_from_exemplar_model <- function(
