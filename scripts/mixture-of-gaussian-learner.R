@@ -127,17 +127,6 @@ p <- d.plot %>%
     alpha = .5) +
   scale_color_manual(values = c("red", "blue")) 
 
-fibonacci <- function(n, concat = T) {
-  if(n <= 1) {
-    return(n)
-  } else {
-    prev <- fibonacci(n - 1, concat = concat)
-    f <- if (concat) c(prev, prev + fibonacci(n - 2, concat = FALSE)) else prev + fibonacci(n - 2, concat = FALSE)
-    return(f)
-  }
-}
-
-fibonacci(10)
 
 # Make a movie out of the updates
 # requires Magick installation
