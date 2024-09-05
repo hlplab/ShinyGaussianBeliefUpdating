@@ -8,7 +8,7 @@ true_mu_2 <- 55
 true_sigma_1 <- 9
 true_sigma_2 <- 16
 
-K <- 10       # number of mixture components
+K <- 20       # number of mixture components
 N <- 10000    # number of learning observations 
 
 # Make learning data
@@ -71,9 +71,10 @@ update_mog <- function(mog, x, wta = FALSE, prune.phi_threshold = 10^-32) {
 # print(mog)
 
 # Visualize a MoG
-plot_mog <- function(mog, x_axis = seq(-100, 100, length.out = 301), animate_by = NULL) {
-  suppressWarnings(
-    mog %>%
+plot_mog <- 
+  function(mog, x_axis = seq(-100, 100, length.out = 501), animate_by = NULL) {
+  suppressWarnings({
+    mog %<>%
       # Unnest if necessary
       { if (!("mu" %in% names(.))) unnest(., cols = c(mog)) else . } %>%
       # Cross with x-axis data
@@ -81,21 +82,33 @@ plot_mog <- function(mog, x_axis = seq(-100, 100, length.out = 301), animate_by 
       # Calculate y
       mutate(y = pmap(
         .l = list(x_axis, phi, mu, sigma), 
-        .f = function(x_axis, phi, mu, sigma) y = phi * dnorm(x = x_axis, mean = mu, sd = sigma)) %>% unlist()) %>%
-      # Plot
+        .f = function(x_axis, phi, mu, sigma) y = phi * dnorm(x = x_axis, mean = mu, sd = sigma)) %>% unlist())
+    
+    mog %>%
       ggplot(aes(x = x_axis, y = y)) +
-      geom_line(aes(group = k), color = "gray") +
+      geom_line(aes(group = k), color = "gray", size = .25) +
       stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_1, sd = true_sigma_1), color = "red") +
       stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_2, sd = true_sigma_2), color = "blue") +
-      scale_x_continuous("VOT (in msec)") +
-      scale_y_continuous("density") +
+      scale_x_continuous(
+        "VOT (in msec)",
+        limits = range(x_axis)) +
+      scale_y_continuous(
+        "density", 
+        limits = 
+          c(
+            0, 
+            max(
+              .5 * c(
+                dnorm(mog$x_axis, mean = true_mu_1, sd = true_sigma_1), 
+                dnorm(mog$x_axis, mean = true_mu_2, sd = true_sigma_2))))) +
       { if (!is.null(animate_by)) 
         transition_states(
           states = !! sym(animate_by), 
           transition_length = 1/5, 
           state_length = 1/5) } +
       facet_wrap(~ mog_id) +
-      theme_bw())
+      theme_bw()
+    })
 }
 
 # Test visualization
@@ -118,7 +131,8 @@ for (i in 1:N) {
 ## Using gganimate instead of animation
 d.plot <- d %>% filter(n < 10)
 
-p <- d.plot %>%
+p <- 
+  d.plot %>%
   plot_mog(animate_by = "n") +
   geom_rug(
     data = d.plot, 
@@ -136,7 +150,8 @@ saveGIF({
   j <- 0
   
   while (i < max_n) { 
-    p <- plot_mog(d[d$n == i,]$mog[[1]]) +
+    p <- 
+      plot_mog(d[d$n == i,]$mog[[1]]) +
       geom_rug(
         data = d %>% filter(between(n, j, i)), 
         mapping = aes(x = x, color = category), 
@@ -158,7 +173,8 @@ saveVideo({
   j <- 0
   
   while (i < max_n) { 
-    p <- plot_mog(d[d$n == i,]$mog[[1]]) +
+    p <- 
+      plot_mog(d[d$n == i,]$mog[[1]]) +
       geom_rug(
         data = d %>% filter(between(n, j, i)), 
         mapping = aes(x = x, color = category), 
