@@ -47,6 +47,52 @@ mog <-
     sigma = runif(K, 0, 60)) %>%
   nest(mog = -c(mog_id))
 
+# Show MoG
+# Visualize a MoG
+plot_mog <- 
+  function(mog, x_axis = seq(-100, 100, length.out = 501), animate_by = NULL, state_length = 1) {
+    suppressWarnings({
+      mog %<>%
+        # Unnest if necessary
+        { if (!("mu" %in% names(.))) unnest(., cols = c(mog)) else . } %>%
+        # Cross with x-axis data
+        crossing(x_axis = x_axis) %>%
+        # Calculate y
+        mutate(y = pmap(
+          .l = list(x_axis, phi, mu, sigma), 
+          .f = function(x_axis, phi, mu, sigma) y = phi * dnorm(x = x_axis, mean = mu, sd = sigma)) %>% unlist())
+      
+      mog %>%
+        ggplot(aes(x = x_axis, y = y)) +
+        geom_line(aes(group = k), color = "gray", size = .25) +
+        stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_1, sd = true_sigma_1), color = "red") +
+        stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_2, sd = true_sigma_2), color = "blue") +
+        scale_x_continuous(
+          "VOT (in msec)",
+          limits = range(x_axis)) +
+        scale_y_continuous(
+          "density", 
+          limits = 
+            c(
+              0, 
+              max(
+                .5 * c(
+                  dnorm(mog$x_axis, mean = true_mu_1, sd = true_sigma_1), 
+                  dnorm(mog$x_axis, mean = true_mu_2, sd = true_sigma_2))))) +
+        { if (!is.null(animate_by)) 
+          transition_states(
+            states = !! sym(animate_by), 
+            transition_length = 0, 
+            state_length = state_length) } +
+        facet_wrap(~ mog_id) +
+        theme_bw()
+    })
+  }
+
+# Test visualization
+mog %>%
+  plot_mog()
+
 # Update MoGs
 update_mog <- function(mog, x, wta = FALSE, prune.phi_threshold = 10^-32) {
   mog %>%
@@ -65,55 +111,6 @@ update_mog <- function(mog, x, wta = FALSE, prune.phi_threshold = 10^-32) {
     # Prune 
     filter(phi > prune.phi_threshold)
 }
-
-# Test updating
-# mog <- update_mog(mog, 20)
-# print(mog)
-
-# Visualize a MoG
-plot_mog <- 
-  function(mog, x_axis = seq(-100, 100, length.out = 501), animate_by = NULL) {
-  suppressWarnings({
-    mog %<>%
-      # Unnest if necessary
-      { if (!("mu" %in% names(.))) unnest(., cols = c(mog)) else . } %>%
-      # Cross with x-axis data
-      crossing(x_axis = x_axis) %>%
-      # Calculate y
-      mutate(y = pmap(
-        .l = list(x_axis, phi, mu, sigma), 
-        .f = function(x_axis, phi, mu, sigma) y = phi * dnorm(x = x_axis, mean = mu, sd = sigma)) %>% unlist())
-    
-    mog %>%
-      ggplot(aes(x = x_axis, y = y)) +
-      geom_line(aes(group = k), color = "gray", size = .25) +
-      stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_1, sd = true_sigma_1), color = "red") +
-      stat_function(fun = ~ .5 * dnorm(.x, mean = true_mu_2, sd = true_sigma_2), color = "blue") +
-      scale_x_continuous(
-        "VOT (in msec)",
-        limits = range(x_axis)) +
-      scale_y_continuous(
-        "density", 
-        limits = 
-          c(
-            0, 
-            max(
-              .5 * c(
-                dnorm(mog$x_axis, mean = true_mu_1, sd = true_sigma_1), 
-                dnorm(mog$x_axis, mean = true_mu_2, sd = true_sigma_2))))) +
-      { if (!is.null(animate_by)) 
-        transition_states(
-          states = !! sym(animate_by), 
-          transition_length = 1/5, 
-          state_length = 1/5) } +
-      facet_wrap(~ mog_id) +
-      theme_bw()
-    })
-}
-
-# Test visualization
-mog %>%
-  plot_mog(animate_by = "mog_id")
 
 # Update MoG with learning data
 d <- 
@@ -139,8 +136,19 @@ p <-
     mapping = aes(x = x, color = category), 
     inherit.aes = FALSE,
     alpha = .5) +
-  scale_color_manual(values = c("red", "blue")) 
+  scale_color_manual(values = c("red", "blue"))
 
+p +
+  ggtitle("Observation: {closest_state}")
+
+d %>%
+  plot_mog(animate_by = "n", state_length = .1) +
+  geom_rug(
+    data = d.plot, 
+    mapping = aes(x = x, color = category), 
+    inherit.aes = FALSE,
+    alpha = .5, size = 2) +
+  scale_color_manual(values = c("red", "blue"))
 
 # Make a movie out of the updates
 # requires Magick installation
